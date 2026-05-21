@@ -25,6 +25,13 @@ window.__jsonify = window.__jsonify || {};
     try { chrome.storage.local.set({ jfy_theme: theme }); } catch {}
   }
 
+  function loadFonts() {
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.href = "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap";
+    document.head.appendChild(link);
+  }
+
   function copyToClipboard(text) {
     navigator.clipboard.writeText(text).catch(() => {
       const ta = document.createElement("textarea");
@@ -48,37 +55,91 @@ window.__jsonify = window.__jsonify || {};
     }, 800);
   }
 
-  function rerender() {
-    const tree = document.querySelector(".jfy-tree");
-    if (!tree) return;
-
+  function getFilteredRows() {
     const rows = Renderer.flattenTree(state.data, {
       collapsed: state.collapsed,
       expandedStringified: state.expandedStringified,
       searchTerm: state.searchTerm,
     });
 
-    const filterRows = state.searchTerm
-      ? rows.filter((r) => {
-          if (r.matched) return true;
-          if (r.type === "object-open" || r.type === "array-open") {
-            return rows.some(
-              (child) =>
-                child.matched &&
-                child.path.startsWith(r.path + ".") || child.path.startsWith(r.path + "[")
-            );
-          }
-          return false;
-        })
-      : rows;
+    if (!state.searchTerm) return { rows, matchCount: 0 };
 
-    const matchCount = rows.filter((r) => r.matched).length;
-    Toolbar.updateMatchCount(matchCount, state.searchTerm ? rows.length : 0);
+    // Keep matched rows + their ancestors for context
+    const matchedPaths = new Set(
+      rows.filter((r) => r.matched).map((r) => r.path)
+    );
 
-    Renderer.renderTree(tree, filterRows, state.searchTerm);
+    function isAncestorOfMatch(rowPath) {
+      for (const mp of matchedPaths) {
+        if (mp.startsWith(rowPath + ".") || mp.startsWith(rowPath + "[")) return true;
+      }
+      return false;
+    }
+
+    const filtered = rows.filter((r) => {
+      if (r.matched) return true;
+      if (r.type === "object-open" || r.type === "array-open") {
+        return isAncestorOfMatch(r.path);
+      }
+      // Keep closing brackets if their open was kept
+      if (r.type === "object-close" || r.type === "array-close") {
+        const openPath = r.path.replace("_close", "");
+        return matchedPaths.has(openPath) || isAncestorOfMatch(openPath);
+      }
+      return false;
+    });
+
+    return { rows: filtered, matchCount: matchedPaths.size };
+  }
+
+  function rerender() {
+    const tree = document.querySelector(".jfy-tree");
+    if (!tree) return;
+
+    const { rows, matchCount } = getFilteredRows();
+
+    Toolbar.updateMatchCount(matchCount, state.searchTerm ? matchCount : 0);
+    Renderer.renderTree(tree, rows, state.searchTerm);
+
+    // Re-attach virtual scroll listener after render
+    attachVirtualScroll(tree);
+  }
+
+  function attachVirtualScroll(treeEl) {
+    const virtual = treeEl.querySelector(".jfy-virtual");
+    const content = treeEl.querySelector(".jfy-virtual-content");
+    if (!virtual || !content) return;
+
+    const VIRTUAL_ROW_HEIGHT = 22;
+    const VIRTUAL_BUFFER = 15;
+
+    // Get the flat rows for reference
+    const allRows = Renderer.flattenTree(state.data, {
+      collapsed: state.collapsed,
+      expandedStringified: state.expandedStringified,
+      searchTerm: state.searchTerm,
+    });
+
+    const total = allRows.length;
+
+    treeEl.addEventListener("scroll", function onScroll() {
+      const scrollTop = treeEl.scrollTop;
+      const visibleStart = Math.floor(scrollTop / VIRTUAL_ROW_HEIGHT);
+      const visibleEnd = visibleStart + Math.ceil(treeEl.clientHeight / VIRTUAL_ROW_HEIGHT);
+
+      const start = Math.max(0, visibleStart - VIRTUAL_BUFFER);
+      const end = Math.min(total, visibleEnd + VIRTUAL_BUFFER);
+
+      content.style.top = start * VIRTUAL_ROW_HEIGHT + "px";
+      content.innerHTML = allRows
+        .slice(start, end)
+        .map((r) => Renderer.renderRowPublic(r, state.searchTerm))
+        .join("");
+    }, { passive: true });
   }
 
   function handleTreeClick(e) {
+    // Toggle collapse
     const toggle = e.target.closest("[data-toggle]");
     if (toggle) {
       const path = toggle.dataset.toggle;
@@ -87,6 +148,7 @@ window.__jsonify = window.__jsonify || {};
       return;
     }
 
+    // Copy path
     const copyPath = e.target.closest("[data-copy-path]");
     if (copyPath) {
       copyToClipboard(copyPath.dataset.copyPath);
@@ -95,6 +157,7 @@ window.__jsonify = window.__jsonify || {};
       return;
     }
 
+    // Copy value
     const copyVal = e.target.closest("[data-copy-val]");
     if (copyVal) {
       copyToClipboard(copyVal.dataset.copyVal);
@@ -102,6 +165,7 @@ window.__jsonify = window.__jsonify || {};
       return;
     }
 
+    // Expand stringified JSON inline
     const expandBadge = e.target.closest("[data-expand-path]");
     if (expandBadge) {
       const path = expandBadge.dataset.expandPath;
@@ -110,6 +174,7 @@ window.__jsonify = window.__jsonify || {};
       return;
     }
 
+    // Update breadcrumb on any row click
     const row = e.target.closest("[data-path]");
     if (row) {
       Toolbar.updateBreadcrumb(row.dataset.path);
@@ -121,7 +186,7 @@ window.__jsonify = window.__jsonify || {};
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "download.json";
+    a.download = location.hostname + ".json";
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -130,9 +195,13 @@ window.__jsonify = window.__jsonify || {};
     state.data = detection.data;
     state.raw = detection.raw;
 
+    // Load theme from storage, fall back to system
     try {
       chrome.storage.local.get(["jfy_theme", "jfy_blocked"], (res) => {
-        state.theme = res.jfy_theme || getSystemTheme();
+        const savedTheme = res.jfy_theme;
+        state.theme = (!savedTheme || savedTheme === "auto")
+          ? getSystemTheme()
+          : savedTheme;
         window.__jsonify.blockedHosts = res.jfy_blocked || [];
         applyTheme(state.theme);
       });
@@ -141,6 +210,7 @@ window.__jsonify = window.__jsonify || {};
       applyTheme(state.theme);
     }
 
+    // Replace entire page
     document.documentElement.innerHTML = "";
     document.documentElement.className = "jfy-root";
 
@@ -157,6 +227,7 @@ window.__jsonify = window.__jsonify || {};
     const app = document.createElement("div");
     app.className = "jfy-app";
 
+    // Title bar
     const titlebar = document.createElement("div");
     titlebar.className = "jfy-titlebar";
     titlebar.innerHTML = `
@@ -170,6 +241,7 @@ window.__jsonify = window.__jsonify || {};
     const stats = Renderer.countStats(detection.data);
     const size = Renderer.formatSize(detection.size);
 
+    // Toolbar
     const toolbar = Toolbar.buildToolbar({
       onSearch(term) {
         state.searchTerm = term;
@@ -194,6 +266,7 @@ window.__jsonify = window.__jsonify || {};
 
     const statsBar = Toolbar.buildStatsBar({ stats, size });
 
+    // Tree container
     const tree = document.createElement("div");
     tree.className = "jfy-tree";
     tree.addEventListener("click", handleTreeClick);
@@ -210,12 +283,19 @@ window.__jsonify = window.__jsonify || {};
     document.documentElement.appendChild(head);
     document.documentElement.appendChild(body);
 
+    // Load fonts after DOM is ready
+    loadFonts();
+
+    // Initial render
     rerender();
 
+    // Listen for OS theme changes
     window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", (e) => {
       try {
         chrome.storage.local.get(["jfy_theme"], (res) => {
-          if (!res.jfy_theme) applyTheme(e.matches ? "light" : "dark");
+          if (!res.jfy_theme || res.jfy_theme === "auto") {
+            applyTheme(e.matches ? "light" : "dark");
+          }
         });
       } catch {
         applyTheme(e.matches ? "light" : "dark");
