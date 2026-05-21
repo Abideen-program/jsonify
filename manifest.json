@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "Jsonify",
+  "version": "1.0.0",
+  "description": "The fast JSON viewer. Live search, virtual rendering for large files, and auto-detection of stringified JSON.",
+
+  "permissions": [
+    "storage"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/detector.js", "src/renderer.js", "src/toolbar.js", "src/main.js"],
+      "css": ["src/theme.css"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "web_accessible_resources": [
+    {
+      "resources": ["src/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Jsonify</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 280px;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      font-size: 13px;
+      background: #0f1117;
+      color: #e2e6f0;
+    }
+    .header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: #4f8ef7; }
+    .logo-name { font-weight: 500; color: #8892a8; font-size: 13px; }
+    .section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+    .section-label { font-size: 10px; font-weight: 500; color: #505972; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; }
+    .row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .row:last-child { margin-bottom: 0; }
+    .row-label { color: #8892a8; font-size: 12px; }
+    select, input[type="text"] {
+      background: #1e2536;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 5px;
+      color: #e2e6f0;
+      font-size: 11px;
+      font-family: inherit;
+      padding: 4px 8px;
+      outline: none;
+    }
+    select { width: 110px; cursor: pointer; }
+    input[type="text"] { width: 160px; }
+    .toggle-wrap { display: flex; align-items: center; gap: 6px; }
+    .toggle { width: 32px; height: 18px; background: #1e2536; border: 1px solid rgba(255,255,255,0.12); border-radius: 9px; cursor: pointer; position: relative; transition: background 0.15s; }
+    .toggle.on { background: #4f8ef7; border-color: #4f8ef7; }
+    .toggle::after { content: ''; position: absolute; width: 12px; height: 12px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: left 0.15s; }
+    .toggle.on::after { left: 16px; }
+    .footer { padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; }
+    .version { font-size: 10px; color: #505972; }
+    a { color: #4f8ef7; text-decoration: none; font-size: 11px; }
+    .blocked-input-wrap { display: flex; gap: 6px; margin-top: 8px; }
+    .blocked-input-wrap input { flex: 1; }
+    .btn-add { background: #1e2536; border: 1px solid rgba(255,255,255,0.1); border-radius: 5px; color: #8892a8; font-size: 11px; font-family: inherit; padding: 4px 10px; cursor: pointer; white-space: nowrap; }
+    .btn-add:hover { color: #4f8ef7; border-color: #4f8ef7; }
+    .blocked-list { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; max-height: 80px; overflow-y: auto; }
+    .blocked-item { display: flex; align-items: center; justify-content: space-between; background: #1e2536; border-radius: 4px; padding: 3px 8px; font-size: 11px; color: #8892a8; }
+    .btn-remove { background: none; border: none; color: #505972; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 0 0 6px; }
+    .btn-remove:hover { color: #ef4444; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo-dot"></div>
+    <div class="logo-name">Jsonify</div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Appearance</div>
+    <div class="row">
+      <span class="row-label">Theme</span>
+      <select id="theme-select">
+        <option value="auto">Auto (system)</option>
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Detection</div>
+    <div class="row">
+      <span class="row-label">Auto-detect JSON</span>
+      <div class="toggle on" id="toggle-detect"></div>
+    </div>
+    <div class="row">
+      <span class="row-label">Detect text/plain</span>
+      <div class="toggle on" id="toggle-plain"></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-label">Blocked sites</div>
+    <div class="blocked-input-wrap">
+      <input type="text" id="blocked-input" placeholder="e.g. github.com" />
+      <button class="btn-add" id="btn-add-blocked">Add</button>
+    </div>
+    <div class="blocked-list" id="blocked-list"></div>
+  </div>
+
+  <div class="footer">
+    <span class="version">v1.0.0</span>
+    <a href="https://github.com/yourusername/jsonify" target="_blank">GitHub</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
